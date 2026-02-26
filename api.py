@@ -502,14 +502,11 @@ async def get_featured(
 ):
     """Fetch Qobuz editorial featured albums."""
 
-    # FIX 1: Rimuoviamo "store_id" perché Qobuz blocca la richiesta (Errore 400)
-    # se cerchiamo di forzare un paese diverso da quello dell'account loggato.
     params: dict = {"type": type, "limit": limit, "offset": offset}
 
     if genre_id:
         params["genre_id"] = genre_id
 
-    # FIX 2: Usiamo "album/getFeatured" invece del vecchio "catalog/getFeatured"
     data = await qobuz_get("album/getFeatured", params=params)
     return {"version": API_VERSION, "data": data}
 
@@ -536,3 +533,4 @@ async def get_genres(parent_id: Optional[int] = Query(default=None)):
 if __name__ == "__main__":
 
     uvicorn.run(app, host="0.0.0.0", port=7979)
+
