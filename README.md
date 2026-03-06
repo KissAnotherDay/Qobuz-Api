@@ -2,4 +2,4 @@
 An API designed to create your own web player like Spotify, but based on the quality and fidelity of Qobuz sound, with a maximum simple rate quality of up to 192Khz.
 
 # Setup
-Insert your token in the USER_AUTH_TOKEN: str = os.getenv("QOBUZ_USER_AUTH_TOKEN", "YOUR TOKEN")
+Insert your token ecc in .env file
