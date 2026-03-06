@@ -27,10 +27,10 @@ API_VERSION = "1.0"
 
 QOBUZ_BASE_URL = "https://www.qobuz.com/api.json/0.2"
 
-APP_ID: str = os.getenv("QOBUZ_APP_ID", "798273057")
-APP_SECRET: str = os.getenv("QOBUZ_APP_SECRET", "abb21364945c0583309667d13ca3d93a")
-USER_AUTH_TOKEN: str = os.getenv("QOBUZ_USER_AUTH_TOKEN", "")
-COUNTRY_CODE: str = os.getenv("COUNTRY_CODE", "IT")
+APP_ID: str = os.getenv("QOBUZ_APP_ID")
+APP_SECRET: str = os.getenv("QOBUZ_APP_SECRET")
+USER_AUTH_TOKEN: str = os.getenv("QOBUZ_USER_AUTH_TOKEN")
+COUNTRY_CODE: str = os.getenv("COUNTRY_CODE")
 
 # ---------------------------------------------------------------------------
 # App lifespan
@@ -472,15 +472,15 @@ async def get_cover(
 #           a `lyrics` field, otherwise return 404)
 # ------------------------------------------------------------------
 
-
+"""
 @app.get("/lyrics/")
 async def get_lyrics(id: int):
-    """Fetch track metadata and extract embedded lyrics if present."""
+    'Fetch track metadata and extract embedded lyrics if present.'
     data = await qobuz_get("track/get", params={"track_id": id, "extra": "lyrics"})
     lyrics = data.get("lyrics")
     if not lyrics:
         raise HTTPException(status_code=404, detail="Lyrics not found for this track")
-    return {"version": API_VERSION, "lyrics": lyrics}
+    return {"version": API_VERSION, "lyrics": lyrics}"""
 
 # ------------------------------------------------------------------
 # Catalogue / featured / new releases
@@ -526,6 +526,59 @@ async def get_genres(parent_id: Optional[int] = Query(default=None)):
     return {"version": API_VERSION, "data": data}
 
 
+
+# ------------------------------------------------------------------
+# Apple Music Search Proxy
+# ------------------------------------------------------------------
+@app.get("/apple/search")
+async def get_apple_search(term: str, country: str = "us", limit: str="10"):
+    """Proxy for research in apple api, this bypass the browser CORS."""
+
+    url = f"https://api.music.apple.com/v1/catalog/{country}/search"
+    
+    params = {
+        "term": term,
+        "limit": limit
+    }
+
+    headers = {
+        "Authorization": f"Bearer {APPLE_TOKEN}",
+        "Origin": "https://music.apple.com"
+    }
+    
+    client = await get_http_client()
+    try:
+        resp = await client.get(url, params=params, headers=headers)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        print(f"Error Apple Api Search: {e}")
+        return {"results": []}
+
+
+# ------------------------------------------------------------------
+# Apple Music Animated Artwork Proxy
+# ------------------------------------------------------------------
+
+@app.get("/apple/animated-art")
+async def get_apple_animated_art(album_id: str, country: str = "us"):
+    """Fetch animated artwork directly from Apple Music bypassing browser CORS."""
+    apple_url = f"https://amp-api.music.apple.com/v1/catalog/{country}/albums/{album_id}?extend=editorialVideo"
+    
+    headers = {
+        "Authorization": f"Bearer {APPLE_TOKEN}",
+        "Origin": "https://music.apple.com" 
+    }
+    
+    client = await get_http_client()
+    try:
+        resp = await client.get(apple_url, headers=headers)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -533,4 +586,5 @@ async def get_genres(parent_id: Optional[int] = Query(default=None)):
 if __name__ == "__main__":
 
     uvicorn.run(app, host="0.0.0.0", port=7979)
+
 
