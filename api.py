@@ -512,18 +512,18 @@ async def get_featured(
     genre_id: Optional[int] = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    country: str = Query(default=COUNTRY_CODE, description="Country passata dal frontend"),
+    country: str = Query(default=COUNTRY_CODE, description="Country passed by the frontend"),
 ):
     """Fetch Qobuz editorial featured albums."""
 
-    # FIX 1: Rimuoviamo "store_id" perché Qobuz blocca la richiesta (Errore 400)
-    # se cerchiamo di forzare un paese diverso da quello dell'account loggato.
+    # FIX 1: Removed "store_id" because Qobuz blocks the request (Error 400)
+    # if we try to force a country different from the one of the logged-in account.
     params: dict = {"type": type, "limit": limit, "offset": offset}
 
     if genre_id:
         params["genre_id"] = genre_id
 
-    # FIX 2: Usiamo "album/getFeatured" invece del vecchio "catalog/getFeatured"
+    # FIX 2: Use "album/getFeatured" instead of the old "catalog/getFeatured"
     data = await qobuz_get("album/getFeatured", params=params)
     return {"version": API_VERSION, "data": data}
 
@@ -548,9 +548,8 @@ async def get_genres(parent_id: Optional[int] = Query(default=None)):
 # Apple Music Search Proxy (Bypass CORS per iTunes)
 # ------------------------------------------------------------------
 @app.get("/apple/search")
-async def get_apple_search(term: str, country: str = "it", limit: str="10"):
-    """Proxy per la ricerca su iTunes, bypassa il blocco CORS del browser."""
-    # Usiamo l'endpoint globale passandogli il paese come parametro
+async def get_apple_search(term: str, country: str = "us", limit: str="10"):
+    """Proxy for search from Apple music bypass the browser CORS block."""
 
     url = f"https://api.music.apple.com/v1/catalog/{country}/search"
     
@@ -561,7 +560,7 @@ async def get_apple_search(term: str, country: str = "it", limit: str="10"):
 
     headers = {
         "Authorization": f"Bearer {APPLE_TOKEN}",
-        "Origin": "https://music.apple.com",# Facciamo credere ad Apple di essere il loro sito!
+        "Origin": "https://music.apple.com",
         "Referer": "https://music.apple.com/"
     }
     
@@ -580,13 +579,13 @@ async def get_apple_search(term: str, country: str = "it", limit: str="10"):
 # ------------------------------------------------------------------
 
 @app.get("/apple/animated-art")
-async def get_apple_animated_art(album_id: str, country: str = "it"):
+async def get_apple_animated_art(album_id: str, country: str = "us"):
     """Fetch animated artwork directly from Apple Music bypassing browser CORS."""
     apple_url = f"https://amp-api.music.apple.com/v1/catalog/{country}/albums/{album_id}?extend=editorialVideo"
     
     headers = {
         "Authorization": f"Bearer {APPLE_TOKEN}",
-        "Origin": "https://music.apple.com", # Facciamo credere ad Apple di essere il loro sito!
+        "Origin": "https://music.apple.com",
         "Referer": "https://music.apple.com/"
     }
     
@@ -606,13 +605,12 @@ async def get_apple_animated_art(album_id: str, country: str = "it"):
 @app.get("/apple/playlist")
 async def get_apple_playlist(
     playlist_id: str,
-    country: str = "it",
-    next_url: Optional[str] = Query(default=None, description="URL pagina successiva (paginazione)")
+    country: str = "us",
+    next_url: Optional[str] = Query(default=None, description="URL next page (pagination)")
 ):
-    """Proxy per fetch playlist Apple Music, bypassa CORS e vincolo Origin."""
+    """Proxy to fetch Apple Music playlists, bypasses CORS and Origin constraint."""
     
     if next_url:
-        # Paginazione: usiamo l'URL diretto fornito da Apple
         url = next_url if next_url.startswith("http") else f"https://api.music.apple.com{next_url}"
     else:
         url = f"https://api.music.apple.com/v1/catalog/{country}/playlists/{playlist_id}"
