@@ -31,6 +31,7 @@ APP_ID: str = os.getenv("QOBUZ_APP_ID")
 APP_SECRET: str = os.getenv("QOBUZ_APP_SECRET")
 USER_AUTH_TOKEN: str = os.getenv("QOBUZ_USER_AUTH_TOKEN")
 COUNTRY_CODE: str = os.getenv("COUNTRY_CODE")
+APPLE_TOKEN :str = os.getenv("APPLE_TOKEN")
 
 # ---------------------------------------------------------------------------
 # App lifespan
@@ -143,8 +144,9 @@ def _build_file_url_secret(track_id: int, format_id: int, unix_ts: int) -> str:
 @app.get("/")
 async def index():
     return {
-        "Qobuz Api By Esposito",
         "version": API_VERSION,
+        "service": "Qobuz-RestAPI",
+        "Author":"Esposito",
         "docs": "/docs",
     }
 
@@ -153,14 +155,14 @@ async def index():
 # User login (exchange credentials for user_auth_token)
 # ------------------------------------------------------------------
 
-
+"""
 @app.get("/login/")
 async def login(email: str = Query(...), password: str = Query(...)):
-    """
+    '''
     Obtain a user_auth_token from Qobuz.
     The MD5 of the password must be sent (Qobuz requirement).
     Returns the full user object including the auth token.
-    """
+    '''
     if not APP_ID:
         raise HTTPException(status_code=500, detail="QOBUZ_APP_ID not configured")
 
@@ -170,7 +172,19 @@ async def login(email: str = Query(...), password: str = Query(...)):
         "app_id": APP_ID,
     }
     data = await qobuz_get("user/login", params=params, require_auth=False)
-    return {"version": API_VERSION, "data": data}
+    return {"version": API_VERSION, "data": data}"""
+
+
+# ------------------------------------------------------------------
+# User info
+# ------------------------------------------------------------------
+
+"""
+@app.get("/user/")
+async def get_user():
+   'Fetch authenticated user info including subscription details.'
+    data = await qobuz_get("user/get")
+    return {"version": API_VERSION, "data": data}"""
 
 
 # ------------------------------------------------------------------
@@ -322,26 +336,26 @@ async def get_playlist(
 # User playlists
 # ------------------------------------------------------------------
 
-
+"""
 @app.get("/user/playlists/")
 async def get_user_playlists(
     user_id: Optional[int] = Query(default=None, description="User ID (omit for self)"),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ):
-    """List playlists owned or favourited by the authenticated user (or another user)."""
+    'List playlists owned or favourited by the authenticated user (or another user).'
     params: dict = {"limit": limit, "offset": offset}
     if user_id:
         params["user_id"] = user_id
     data = await qobuz_get("playlist/getUserPlaylists", params=params)
-    return {"version": API_VERSION, "data": data}
+    return {"version": API_VERSION, "data": data}"""
 
 
 # ------------------------------------------------------------------
 # Favourites
 # ------------------------------------------------------------------
 
-
+"""
 @app.get("/favorites/")
 async def get_favorites(
     type: str = Query(
@@ -351,14 +365,14 @@ async def get_favorites(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ):
-    """Fetch the authenticated user's favourites."""
+    'Fetch the authenticated user's favourites.'
     allowed = {"tracks", "albums", "artists"}
     if type not in allowed:
         raise HTTPException(status_code=400, detail=f"type must be one of {allowed}")
 
     params = {"type": type, "limit": limit, "offset": offset}
     data = await qobuz_get("favorite/getUserFavorites", params=params)
-    return {"version": API_VERSION, "data": data}
+    return {"version": API_VERSION, "data": data}"""
 
 
 # ------------------------------------------------------------------
@@ -472,15 +486,15 @@ async def get_cover(
 #           a `lyrics` field, otherwise return 404)
 # ------------------------------------------------------------------
 
-"""
+
 @app.get("/lyrics/")
 async def get_lyrics(id: int):
-    'Fetch track metadata and extract embedded lyrics if present.'
+    """Fetch track metadata and extract embedded lyrics if present."""
     data = await qobuz_get("track/get", params={"track_id": id, "extra": "lyrics"})
     lyrics = data.get("lyrics")
     if not lyrics:
         raise HTTPException(status_code=404, detail="Lyrics not found for this track")
-    return {"version": API_VERSION, "lyrics": lyrics}"""
+    return {"version": API_VERSION, "lyrics": lyrics}
 
 # ------------------------------------------------------------------
 # Catalogue / featured / new releases
@@ -502,11 +516,14 @@ async def get_featured(
 ):
     """Fetch Qobuz editorial featured albums."""
 
+    # FIX 1: Rimuoviamo "store_id" perché Qobuz blocca la richiesta (Errore 400)
+    # se cerchiamo di forzare un paese diverso da quello dell'account loggato.
     params: dict = {"type": type, "limit": limit, "offset": offset}
 
     if genre_id:
         params["genre_id"] = genre_id
 
+    # FIX 2: Usiamo "album/getFeatured" invece del vecchio "catalog/getFeatured"
     data = await qobuz_get("album/getFeatured", params=params)
     return {"version": API_VERSION, "data": data}
 
@@ -528,11 +545,12 @@ async def get_genres(parent_id: Optional[int] = Query(default=None)):
 
 
 # ------------------------------------------------------------------
-# Apple Music Search Proxy
+# Apple Music Search Proxy (Bypass CORS per iTunes)
 # ------------------------------------------------------------------
 @app.get("/apple/search")
-async def get_apple_search(term: str, country: str = "us", limit: str="10"):
-    """Proxy for research in apple api, this bypass the browser CORS."""
+async def get_apple_search(term: str, country: str = "it", limit: str="10"):
+    """Proxy per la ricerca su iTunes, bypassa il blocco CORS del browser."""
+    # Usiamo l'endpoint globale passandogli il paese come parametro
 
     url = f"https://api.music.apple.com/v1/catalog/{country}/search"
     
@@ -543,7 +561,8 @@ async def get_apple_search(term: str, country: str = "us", limit: str="10"):
 
     headers = {
         "Authorization": f"Bearer {APPLE_TOKEN}",
-        "Origin": "https://music.apple.com"
+        "Origin": "https://music.apple.com",# Facciamo credere ad Apple di essere il loro sito!
+        "Referer": "https://music.apple.com/"
     }
     
     client = await get_http_client()
@@ -552,7 +571,7 @@ async def get_apple_search(term: str, country: str = "us", limit: str="10"):
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
-        print(f"Error Apple Api Search: {e}")
+        print(f"Errore ricerca iTunes: {e}")
         return {"results": []}
 
 
@@ -561,13 +580,14 @@ async def get_apple_search(term: str, country: str = "us", limit: str="10"):
 # ------------------------------------------------------------------
 
 @app.get("/apple/animated-art")
-async def get_apple_animated_art(album_id: str, country: str = "us"):
+async def get_apple_animated_art(album_id: str, country: str = "it"):
     """Fetch animated artwork directly from Apple Music bypassing browser CORS."""
     apple_url = f"https://amp-api.music.apple.com/v1/catalog/{country}/albums/{album_id}?extend=editorialVideo"
     
     headers = {
         "Authorization": f"Bearer {APPLE_TOKEN}",
-        "Origin": "https://music.apple.com" 
+        "Origin": "https://music.apple.com", # Facciamo credere ad Apple di essere il loro sito!
+        "Referer": "https://music.apple.com/"
     }
     
     client = await get_http_client()
@@ -579,6 +599,42 @@ async def get_apple_animated_art(album_id: str, country: str = "us"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+# ------------------------------------------------------------------
+# Apple Music Playlist Proxy
+# ------------------------------------------------------------------
+@app.get("/apple/playlist")
+async def get_apple_playlist(
+    playlist_id: str,
+    country: str = "it",
+    next_url: Optional[str] = Query(default=None, description="URL pagina successiva (paginazione)")
+):
+    """Proxy per fetch playlist Apple Music, bypassa CORS e vincolo Origin."""
+    
+    if next_url:
+        # Paginazione: usiamo l'URL diretto fornito da Apple
+        url = next_url if next_url.startswith("http") else f"https://api.music.apple.com{next_url}"
+    else:
+        url = f"https://api.music.apple.com/v1/catalog/{country}/playlists/{playlist_id}"
+
+    headers = {
+        "Authorization": f"Bearer {APPLE_TOKEN}",
+        "Origin": "https://music.apple.com",
+        "Referer": "https://music.apple.com/"
+    }
+
+    client = await get_http_client()
+    try:
+        resp = await client.get(url, headers=headers)
+        resp.raise_for_status()
+        return resp.json()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=f"Apple API error: {e.response.status_code}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -586,5 +642,13 @@ async def get_apple_animated_art(album_id: str, country: str = "us"):
 if __name__ == "__main__":
 
     uvicorn.run(app, host="0.0.0.0", port=7979)
+
+
+
+
+
+
+
+
 
 
