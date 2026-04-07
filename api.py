@@ -545,7 +545,7 @@ async def get_genres(parent_id: Optional[int] = Query(default=None)):
 
 
 # ------------------------------------------------------------------
-# Apple Music Search Proxy (Bypass CORS per iTunes)
+# Apple Music Search Proxy (Bypass CORS for Apple music)
 # ------------------------------------------------------------------
 @app.get("/apple/search")
 async def get_apple_search(term: str, country: str = "us", limit: str="10"):
